@@ -1017,7 +1017,7 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
     if isinstance(poly, Region):
         lst = []
         for poly2 in poly.list_poly:
-            red = reduce(poly2)
+            red, _ = reduce(poly2)
             if is_fulldim(red):
                 lst.append(red)
         if len(lst) > 0:
@@ -1025,16 +1025,16 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
         else:
             return Polytope()
     # is `poly` already in minimal representation ?
+    # Start tracking the indices
+    indices = np.linspace(0, poly.A.shape[0] - 1, poly.A.shape[0], dtype=int)
+    duplicates = dict()
     if poly.minrep:
-        return poly
+        return poly, indices, duplicates
     if not is_fulldim(poly):
-        return Polytope()
+        return Polytope(), np.array([]), duplicates
     # `poly` isn't flat
     A_arr = poly.A
     b_arr = poly.b
-
-    # Start tracking the indices
-    indices = np.linspace(0, A_arr.shape[0] - 1, A_arr.shape[0], dtype=int)
 
     # Remove rows with b = inf
     keep_row = np.nonzero(poly.b != np.inf)
@@ -1055,6 +1055,16 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
         for j in xrange(i + 1, neq):
             if np.dot(M1n[i].T, M1n[j]) > 1 - abs_tol:
                 keep_i = 0
+                if j in duplicates:
+                    duplicates[j].append(i)
+                else:
+                    duplicates[j] = [i]
+
+                # In case there is more than one duplicate
+                if i in duplicates:
+                    duplicates[j].extend(duplicates[i])
+                    del duplicates[i]
+                break
         if keep_i:
             keep_row.append(i)
     A_arr = A_arr[keep_row]
@@ -1064,7 +1074,7 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
     neq, nx = A_arr.shape
     if nonEmptyBounded:
         if neq <= nx + 1:
-            return Polytope(A_arr, b_arr), indices
+            return Polytope(A_arr, b_arr), indices, duplicates
     # Now eliminate hyperplanes outside the bounding box
     if neq > 3 * nx:
         lb, ub = Polytope(A_arr, b_arr).bounding_box
@@ -1078,7 +1088,7 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
     neq, nx = A_arr.shape
     if nonEmptyBounded:
         if neq <= nx + 1:
-            return Polytope(A_arr, b_arr), indices
+            return Polytope(A_arr, b_arr), indices, duplicates
     del keep_row[:]
     for k in xrange(A_arr.shape[0]):
         f = -A_arr[k, :]
@@ -1096,7 +1106,7 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
     polyOut = Polytope(A_arr[keep_row], b_arr[keep_row])
     polyOut.minrep = True
     indices = indices[keep_row]
-    return polyOut, indices
+    return polyOut, indices, duplicates
 
 
 def union(polyreg1, polyreg2, check_convex=False):
