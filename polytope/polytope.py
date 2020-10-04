@@ -1032,10 +1032,16 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
     # `poly` isn't flat
     A_arr = poly.A
     b_arr = poly.b
+
+    # Start tracking the indices
+    indices = np.linspace(0, A_arr.shape[0] - 1, A_arr.shape[0], dtype=int)
+
     # Remove rows with b = inf
     keep_row = np.nonzero(poly.b != np.inf)
     A_arr = A_arr[keep_row]
     b_arr = b_arr[keep_row]
+    indices = indices[keep_row]
+
     neq = np.shape(A_arr)[0]
     # first eliminate the linearly dependent rows
     # corresponding to the same hyperplane
@@ -1053,10 +1059,12 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
             keep_row.append(i)
     A_arr = A_arr[keep_row]
     b_arr = b_arr[keep_row]
+    indices = indices[keep_row]
+
     neq, nx = A_arr.shape
     if nonEmptyBounded:
         if neq <= nx + 1:
-            return Polytope(A_arr, b_arr)
+            return Polytope(A_arr, b_arr), indices
     # Now eliminate hyperplanes outside the bounding box
     if neq > 3 * nx:
         lb, ub = Polytope(A_arr, b_arr).bounding_box
@@ -1066,10 +1074,11 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
                   (np.array([b_arr]).T - np.dot(A_arr, lb)) < -1e-4)
         A_arr = A_arr[cand.squeeze()]
         b_arr = b_arr[cand.squeeze()]
+        indices = indices[cand.squeeze()]
     neq, nx = A_arr.shape
     if nonEmptyBounded:
         if neq <= nx + 1:
-            return Polytope(A_arr, b_arr)
+            return Polytope(A_arr, b_arr), indices
     del keep_row[:]
     for k in xrange(A_arr.shape[0]):
         f = -A_arr[k, :]
@@ -1086,7 +1095,8 @@ def reduce(poly, nonEmptyBounded=1, abs_tol=ABS_TOL):
             keep_row.append(k)
     polyOut = Polytope(A_arr[keep_row], b_arr[keep_row])
     polyOut.minrep = True
-    return polyOut
+    indices = indices[keep_row]
+    return polyOut, indices
 
 
 def union(polyreg1, polyreg2, check_convex=False):
